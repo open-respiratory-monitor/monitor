@@ -51,11 +51,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # set mode
         if mode.lower() == 'debug':
-            fast_update_time = 10
+            fast_update_time = 50
             slow_update_time = 1000
             mode_verbose = True
         else:
-            fast_update_time = 10
+            fast_update_time = 50
             slow_update_time = 100
             mode_verbose = False
 
@@ -129,7 +129,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # change the plot range
         #self.graph0.setYRange(-30,30,padding = 0.1)
         #self.graph1.setYRange(-2,2,padding = 0.1)
-        self.graph3.setYRange(-1,1,padding = 0.1)
+        self.graph3.setYRange(-.5,2.0,padding = 0.1)
 
         # make a QPen object to hold the marker properties
         pen = pg.mkPen(color = 'y',width = 1)
@@ -137,13 +137,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # define the curves to plot
         self.data_line1 = self.graph1.plot(self.fastdata.dt,    self.fastdata.p1,       pen = pen)
+        self.data_line1b = self.graph1.plot(self.fastdata.dt,   self.fastdata.p2, pen = bluepen)
         self.data_line2 = self.graph2.plot(self.fastdata.dt,    self.fastdata.flow,     pen = pen)
         #self.data_line2b = self.graph2.plot(self.fastdata.dt, self.fastdata.flow, pen = bluepen)
-        self.data_line3 = self.graph3.plot(self.fastdata.dt,    self.fastdata.vol_raw,      pen = pen)
-        #self.data_line3b = self.graph3.plot(self.fastdata.dt,   self.fastdata.vol_detrend, pen = bluepen)
+        self.data_line3 = self.graph3.plot(self.fastdata.dt,    self.fastdata.vol,      pen = pen)
+        self.data_line3b = self.graph3.plot(self.fastdata.dt,   self.fastdata.vol_raw, pen = bluepen)
         # update the graphs at regular intervals (so it runs in a separate thread!!)
         # Stuff with the timer
-        self.t_update = 10 #update time of timer in ms
+        self.t_update = 100 #update time of timer in ms
         self.timer = QtCore.QTimer()
         self.timer.setInterval(self.t_update)
         self.timer.timeout.connect(self.update_plots)
@@ -156,10 +157,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # update the plots with the new data
 
-        self.data_line1.setData(self.fastdata.t,   self.fastdata.p1)
-        self.data_line2.setData(self.fastdata.t,   self.fastdata.flow)
-        self.data_line3.setData(self.fastdata.t,   self.fastdata.vol_raw) #update the data
-        #self.data_line3b.setData(self.fastdata.t,  self.fastdata.v_drift)
+        self.data_line1.setData(self.fastdata.dt,   self.fastdata.p1)
+        self.data_line1b.setData(self.fastdata.dt,   self.fastdata.p2)
+        self.data_line2.setData(self.fastdata.dt,   self.fastdata.flow)
+        self.data_line3.setData(self.fastdata.dt,   self.fastdata.vol) #update the data
+        self.data_line3b.setData(self.fastdata.dt,  self.fastdata.vol_raw)
         """
         try:
             fs = 1.0/np.abs(self.fastdata.dt[-2] - self.fastdata.dt[-1])

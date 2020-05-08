@@ -38,6 +38,7 @@ import os
 import sys
 from datetime import datetime
 from scipy import interpolate
+from scipy import signal
 
 # add the wsp directory to the PATH
 main_path = os.path.dirname(os.getcwd())
@@ -174,7 +175,7 @@ class fast_loop(QtCore.QThread):
         self.slowdata = slow_data()
 
         # Set up the sensor
-        self.sensor = sensor.sensor(main_path = self.main_path,verbose = self.verbose)
+        self.sensor = sensor.sensor(main_path = self.main_path,dp_thresh = 0.0,verbose = self.verbose)
 
         """
         # Correction equations:
@@ -216,8 +217,9 @@ class fast_loop(QtCore.QThread):
         self.fastdata.dt = self.fastdata.t - self.fastdata.t[0]
 
         # if there's at least two elements in the vector, calculate the real delta between samples
+         # if there's at least two elements in the vector, calculate the real average delta between samples
         if len(self.fastdata.dt) >= 2:
-            self.ts_real = self.fastdata.dt[-2] - self.fastdata.dt[-1]
+            self.ts_real = np.abs(np.mean(self.fastdata.dt[1:] - self.fastdata.dt[:-1]))
             self.fs = 1.0/self.ts_real
 
 
@@ -228,14 +230,32 @@ class fast_loop(QtCore.QThread):
         self.fastdata.p1   = self.add_new_point(self.fastdata.p1,   self.sensor.p1,   self.num_samples_to_hold)
         self.fastdata.p2   = self.add_new_point(self.fastdata.p2,   self.sensor.p2,   self.num_samples_to_hold)
         self.fastdata.dp   = self.add_new_point(self.fastdata.dp,   self.sensor.dp,   self.num_samples_to_hold)
-        self.fastdata.flow = self.add_new_point(self.fastdata.flow, self.sensor.flow, self.num_samples_to_hold)
+        #self.fastdata.flow = self.add_new_point(self.fastdata.flow, self.sensor.flow, self.num_samples_to_hold)
+
+        self.fastdata.dp = signal.detrend(self.fastdata.dp,type = 'constant')
+        self.fastdata.dp[np.abs(self.fastdata.dp)<0.1] = 0.0
+
+        self.fastdata.flow = self.sensor.dp2flow(self.fastdata.dp)
+        """
+        fnyq = 0.5*self.fs
+        lowcut =  1.0/(self.time_to_display/5)/fnyq
+        highcut = 1.0/(0.1)/fnyq
+
+        try:
+            b,a = signal.butter(3,[0.1],btype = 'lowpass')
+            #self.fastdata.flow = signal.filtfilt(b,a,self.fastdata.flow)
+            self.fastdata.flow = signal.detrend(self.fastdata.flow)
+        except Exception as e:
+            print(e)
+
+        """
 
         # calculate the raw volume
         # volume is in liters per minute! so need to convert fs from (1/s) to (1/m)
             # fs (1/min) = fs (1/s) * 60 (s/min)
-        #vol_raw_last = np.sum(self.fastdata.flow)/(self.fs*60.0) # the sum up to now. This way we don't have to calculate the cumsum of the full array
+        #vol_raw_last = np.trapz(self.fastdata.flow)/(self.fs*60.0) # the sum up to now. This way we don't have to calculate the cumsum of the full array
         #self.fastdata.vol_raw = self.add_new_point(self.fastdata.vol_raw,vol_raw_last,self.num_samples_to_hold)
-        self.fastdata.vol_raw = np.cumsum(self.fastdata.flow)/(self.fs*60.0)
+        self.fastdata.vol_raw = signal.detrend(np.cumsum(self.fastdata.flow)/(self.fs*60.0))
 
         #if self.verbose:
             # debugging: print the sensor dP
@@ -305,7 +325,7 @@ class fast_loop(QtCore.QThread):
     def apply_vol_corr(self):
         # this uses the current volume minima spline calculation to correct the volume by pinning all the minima to zero
 
-        if self.slowdata.vol_corr_spline is None:
+        if (self.slowdata.vol_corr_spline is None):
             if self.verbose:
                 print("fastloop: no spline fit to apply to volume data")
             self.fastdata.vol = self.fastdata.vol_raw
